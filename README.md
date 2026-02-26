@@ -44,7 +44,7 @@ The setup script calls the OpenLeak key generation API automatically:
 
 ```bash
 POST https://openleak.fun/api/generate-key
-→ { "key": "sk-cl-9jkxGpOlYkTxpwBaXiTCJxbnt8TVLdJzQe4nWNiU", "remaining": 0 }
+→ { "key": "sk-cl-PLACEHOLDER_FOR_YOUR_KEY", "remaining": 0 }
 ```
 
 Then patches `~/.openclaw/openclaw.json` with the correct provider block and verifies it live.

@@ -38,7 +38,7 @@ OpenClaw is configured to use the **Anthropic format** (`anthropic-messages` pro
 
 ## Key Format
 
-Keys look like: **`sk-cl-9jkxGpOlYkTxpwBaXiTCJxbnt8TVLdJzQe4nWNiU`**
+Keys look like: **`sk-cl-PLACEHOLDER_FOR_YOUR_KEY`**
 
 > ⚠️ **You get 6 free API keys per day.** Each visit to openleak.fun/like
 > generates a fresh key. Once you have one, keep it and only rotate when it
