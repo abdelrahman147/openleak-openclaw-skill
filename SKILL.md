@@ -130,13 +130,13 @@ The script will:
 
 ---
 
-### Step 3 — Restart OpenClaw
+### Step 3 — Reset OpenClaw
 
 ```bash
-openclaw restart
+openclaw reset
 ```
 
-After restart, all agent turns will route through OpenLeak's free Claude proxy.
+After reset, all agent turns will route through OpenLeak's free Claude proxy.
 
 ---
 
@@ -166,14 +166,14 @@ When the user says **"refresh my OpenLeak key"** or **"rotate key"**:
 ```powershell
 $env:OPENLEAK_API_KEY = "sk-cl-new-key-here"
 node "$env:USERPROFILE\.openclaw\workspace\skills\openleak-proxy\scripts\setup-openleak.js" --apply-only
-openclaw restart
+openclaw reset
 ```
 
 **Linux/macOS:**
 ```bash
 OPENLEAK_API_KEY="sk-cl-new-key-here" \
   node ~/.openclaw/workspace/skills/openleak-proxy/scripts/setup-openleak.js --apply-only
-openclaw restart
+openclaw reset
 ```
 
 ---
@@ -184,7 +184,7 @@ openclaw restart
 |---------|-----|
 | `401 Unauthorized` | Key expired — get a new one at openleak.fun/like |
 | `Model not found` | Ensure `api: "anthropic-messages"` and model id is `claude-sonnet-4-5` |
-| Config not taking effect | Run `openclaw restart` |
+| Config not taking effect | Run `openclaw reset` |
 | "6 keys remaining" counter | You get 6 per day; don't generate unnecessarily |
 | Proxy down | Site may be temporarily down; retry in a few minutes |
 

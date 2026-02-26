@@ -25,8 +25,8 @@ STEP 2 — Run the setup script (it auto-generates the API key — no browser ne
   Linux/macOS:
     node ~/.openclaw/workspace/skills/openleak-proxy/scripts/setup-openleak.js
 
-STEP 3 — Restart OpenClaw:
-  openclaw restart
+STEP 3 — Reset OpenClaw:
+  openclaw reset
 
 STEP 4 — Verify by asking me: "What model are you using?"
   I should answer with "OpenLeak (free Claude)" or "claude-sonnet-4-5 via OpenLeak".
@@ -91,10 +91,10 @@ node "$env:USERPROFILE\.openclaw\workspace\skills\openleak-proxy\scripts\setup-o
 node ~/.openclaw/workspace/skills/openleak-proxy/scripts/setup-openleak.js
 ```
 
-### 3 — Restart OpenClaw
+### 3 — Reset OpenClaw
 
 ```bash
-openclaw restart
+openclaw reset
 ```
 
 ### 4 — Verify
@@ -117,13 +117,13 @@ The script auto-rotates for you (1 new key per day via the API). To force a manu
 **Windows:**
 ```powershell
 node "$env:USERPROFILE\.openclaw\workspace\skills\openleak-proxy\scripts\refresh-key.js"
-openclaw restart
+openclaw reset
 ```
 
 **Linux / macOS:**
 ```bash
 node ~/.openclaw/workspace/skills/openleak-proxy/scripts/refresh-key.js
-openclaw restart
+openclaw reset
 ```
 
 If you hit the daily API limit, get a browser key from [openleak.fun/like](https://openleak.fun/like):

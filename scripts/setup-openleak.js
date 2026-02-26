@@ -277,8 +277,8 @@ async function main() {
     console.log(`    Key     : ${apiKey.slice(0, 12)}…`);
     console.log("    Model   : openleak/claude-sonnet-4-5 (free Claude Sonnet 4.5)");
     console.log("    Proxy   :", OPENLEAK_BASE);
-    console.log("\n    Restart OpenClaw to apply:");
-    console.log("      openclaw restart\n");
+    console.log("\n    Reset OpenClaw to apply:");
+    console.log("      openclaw reset\n");
 }
 
 main().catch((err) => {
