@@ -4,33 +4,24 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * OpenClaw Skill: openleak-proxy
  *
- * Configures OpenClaw to use the free OpenLeak Claude API proxy.
+ * Fully automatic setup — no browser, no copy-pasting.
  *
- * HOW OPENLEAK KEYS WORK:
- *   Keys are generated entirely in the browser at https://openleak.fun/like
- *   (click "Generate API Key"). Cloudflare protects the site from bots, so
- *   there is no unauthenticated REST endpoint for programmatic creation.
+ * 1. Calls POST https://openleak.fun/api/generate-key  (1 free key/day per IP)
+ * 2. Deep-merges the OpenLeak provider block into ~/.openclaw/openclaw.json
+ * 3. Verifies the key with a live test request
  *
- *   API Endpoints (confirmed from openleak.fun page source):
- *     Anthropic format : https://openleak.fun/      (SDK appends /v1/messages)
- *     OpenAI format    : https://openleak.fun/v1    (SDK appends /chat/completions)
+ * API Details (openleak.fun):
+ *   Endpoint  : POST https://openleak.fun/api/generate-key
+ *   Rate limit: 1 key per IP per day (resets midnight UTC)
+ *   Key format: sk-cl-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (46 chars)
+ *   Anthropic : https://openleak.fun         (x-api-key header)
+ *   OpenAI    : https://openleak.fun/v1      (Authorization: Bearer header)
  *
  * Usage:
- *   # 1. Get your key from https://openleak.fun/like  (click "Generate API Key")
- *   # 2. Run this script with your key:
- *
- *   Windows (PowerShell):
- *     $env:OPENLEAK_API_KEY="sk-cl-xxx"; node setup-openleak.js
- *
- *   Linux/macOS:
- *     OPENLEAK_API_KEY=sk-cl-xxx node setup-openleak.js
- *
- *   # Skip the live verification step:
- *   OPENLEAK_API_KEY=sk-cl-xxx node setup-openleak.js --apply-only
- *
- *   Options:
- *     --apply-only   skip the live verification step (faster)
- *     --info         print config paths and exit
+ *   node setup-openleak.js                   # auto-generate key + apply + verify
+ *   node setup-openleak.js --apply-only      # skip verification
+ *   node setup-openleak.js --info            # print config paths and exit
+ *   OPENLEAK_API_KEY=sk-cl-xxx node setup-openleak.js  # use existing key
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -42,14 +33,10 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-// ── Constants (confirmed from openleak.fun HTML source) ───────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const OPENLEAK_BASE = "https://openleak.fun";
-// Anthropic SDK: base URL, messages path appended as /v1/messages
-const OPENLEAK_ANTHROPIC_BASE = OPENLEAK_BASE;
-// OpenAI SDK: base URL is /v1
-const OPENLEAK_OPENAI_BASE = `${OPENLEAK_BASE}/v1`;
-
+const OPENLEAK_KEYGEN_URL = `${OPENLEAK_BASE}/api/generate-key`;
 const OPENCLAW_CONFIG_PATH = path.join(os.homedir(), ".openclaw", "openclaw.json");
 
 // ── HTTP helper ───────────────────────────────────────────────────────────────
@@ -67,7 +54,7 @@ function httpRequest(url, options = {}) {
             method: options.method || "GET",
             headers: {
                 "Content-Type": "application/json",
-                "User-Agent": "openclaw-openleak-skill/1.0",
+                "User-Agent": "openclaw-openleak-skill/2.0",
                 "Accept": "application/json",
                 ...(body ? { "Content-Length": Buffer.byteLength(body) } : {}),
                 ...(options.headers || {}),
@@ -105,12 +92,11 @@ function readConfig() {
     if (!fs.existsSync(OPENCLAW_CONFIG_PATH)) return {};
     try {
         const raw = fs.readFileSync(OPENCLAW_CONFIG_PATH, "utf8")
-            .replace(/\/\/[^\n]*/g, "")   // strip // comments (JSON5-ish)
+            .replace(/\/\/[^\n]*/g, "")    // strip // comments
             .replace(/,\s*([\]}])/g, "$1"); // strip trailing commas
         return JSON.parse(raw);
     } catch (e) {
-        console.warn("⚠️  Could not parse existing openclaw.json — will overlay on top of it.");
-        console.warn("   Reason:", e.message);
+        console.warn("⚠️  Could not parse existing openclaw.json — will overlay cleanly.");
         return {};
     }
 }
@@ -121,22 +107,62 @@ function writeConfig(cfg) {
     fs.writeFileSync(OPENCLAW_CONFIG_PATH, JSON.stringify(cfg, null, 2) + "\n", "utf8");
 }
 
-// ── Provider patch ────────────────────────────────────────────────────────────
+// ── Key generation ────────────────────────────────────────────────────────────
+
+async function generateKey() {
+    console.log("🔑  Requesting a free API key from openleak.fun …");
+    console.log(`    Endpoint: POST ${OPENLEAK_KEYGEN_URL}`);
+
+    let res;
+    try {
+        res = await httpRequest(OPENLEAK_KEYGEN_URL, { method: "POST" });
+    } catch (err) {
+        throw new Error(`Network error contacting openleak.fun: ${err.message}`);
+    }
+
+    let parsed;
+    try {
+        parsed = JSON.parse(res.body);
+    } catch (_) {
+        throw new Error(`openleak.fun returned non-JSON (HTTP ${res.status}): ${res.body.slice(0, 200)}`);
+    }
+
+    // Rate limited
+    if (res.status === 429) {
+        const reset = parsed.reset ? new Date(parsed.reset).toLocaleString() : "midnight UTC";
+        console.error("\n⛔  Daily API key limit reached (1 per IP per day).");
+        console.error(`    Resets at: ${reset}`);
+        console.error("\n    Options:");
+        console.error("      1. Wait until midnight UTC and run again.");
+        console.error("      2. Visit https://openleak.fun/like in your browser (7 more keys/day there).");
+        console.error("         Then re-run: OPENLEAK_API_KEY=sk-cl-xxx node setup-openleak.js\n");
+        process.exit(1);
+    }
+
+    if (res.status !== 200 || !parsed.key) {
+        throw new Error(
+            `Unexpected response (HTTP ${res.status}): ${JSON.stringify(parsed).slice(0, 300)}`
+        );
+    }
+
+    const remaining = typeof parsed.remaining === "number" ? parsed.remaining : "?";
+    console.log(`✅  Got key!  (${remaining} API key(s) remaining today)`);
+    return parsed.key;
+}
+
+// ── Provider config patch ─────────────────────────────────────────────────────
 
 function buildProviderPatch(apiKey) {
     return {
-        // Store the key in the env block so it can be referenced via ${OPENLEAK_API_KEY}
         env: {
             OPENLEAK_API_KEY: apiKey,
         },
         agents: {
             defaults: {
-                // Set OpenLeak as the primary model
                 model: {
                     primary: "openleak/claude-sonnet-4-5",
                     fallbacks: [],
                 },
-                // Register the model in the catalog so /model command can list it
                 models: {
                     "openleak/claude-sonnet-4-5": {
                         alias: "OpenLeak (free Claude)",
@@ -148,9 +174,8 @@ function buildProviderPatch(apiKey) {
             mode: "merge",
             providers: {
                 openleak: {
-                    // Anthropic-compatible base URL (confirmed from openleak.fun source)
-                    // OpenClaw will call: baseUrl + /v1/messages
-                    baseUrl: OPENLEAK_ANTHROPIC_BASE,
+                    // Anthropic-compatible base URL
+                    baseUrl: OPENLEAK_BASE,
                     apiKey: "${OPENLEAK_API_KEY}",
                     api: "anthropic-messages",
                     models: [
@@ -181,8 +206,7 @@ async function verifyKey(apiKey) {
     });
 
     try {
-        // OpenLeak Anthropic format: POST /v1/messages  with x-api-key header
-        const res = await httpRequest(`${OPENLEAK_ANTHROPIC_BASE}/v1/messages`, {
+        const res = await httpRequest(`${OPENLEAK_BASE}/v1/messages`, {
             method: "POST",
             body,
             headers: {
@@ -199,35 +223,12 @@ async function verifyKey(apiKey) {
                 return true;
             }
         }
-        console.warn(`⚠️  Unexpected response (HTTP ${res.status}):`, res.body.slice(0, 400));
-        console.warn("    The key may still work — check manually if needed.");
+        console.warn(`⚠️  Unexpected verify response (HTTP ${res.status}):`, res.body.slice(0, 300));
         return false;
     } catch (err) {
         console.warn("⚠️  Verification request failed:", err.message);
         return false;
     }
-}
-
-// ── Guidance when no key is provided ─────────────────────────────────────────
-
-function printKeyInstructions() {
-    const sep = "═".repeat(62);
-    console.error(`\n╔${sep}╗`);
-    console.error("║         HOW TO GET YOUR FREE OPENLEAK API KEY              ║");
-    console.error(`╠${sep}╣`);
-    console.error("║  1. Open  https://openleak.fun/like  in your browser       ║");
-    console.error('║  2. Click "Generate API Key" on the page                   ║');
-    console.error("║  3. Copy the key  (looks like  sk-cl-xxxxxxxxxxxxxxxxxxxx) ║");
-    console.error("║     ⚠️  You get 6 free keys per day — use them wisely!     ║");
-    console.error("║  4. Re-run this script with your key:                      ║");
-    console.error("║                                                             ║");
-    console.error('║    Windows (PowerShell):                                   ║');
-    console.error('║      $env:OPENLEAK_API_KEY="sk-cl-xxx"                     ║');
-    console.error("║      node setup-openleak.js                                ║");
-    console.error("║                                                             ║");
-    console.error("║    Linux/macOS:                                            ║");
-    console.error("║      OPENLEAK_API_KEY=sk-cl-xxx node setup-openleak.js     ║");
-    console.error(`╚${sep}╝\n`);
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -239,29 +240,24 @@ async function main() {
     const skipVerify = args.includes("--no-verify") || applyOnly;
 
     if (infoOnly) {
-        console.log("OpenLeak Skill — Configuration Info");
+        console.log("OpenLeak Skill v2 — Info");
         console.log("  openclaw.json  :", OPENCLAW_CONFIG_PATH);
-        console.log("  Anthropic URL  :", OPENLEAK_ANTHROPIC_BASE);
-        console.log("  OpenAI URL     :", OPENLEAK_OPENAI_BASE);
+        console.log("  Key gen URL    :", OPENLEAK_KEYGEN_URL);
+        console.log("  Anthropic URL  :", OPENLEAK_BASE);
+        console.log("  OpenAI URL     :", `${OPENLEAK_BASE}/v1`);
         console.log("  Primary model  : openleak/claude-sonnet-4-5");
+        console.log("  Rate limit     : 1 auto-generated key per IP per day");
         return;
     }
 
-    // ── Require key from environment (browser-generated) ──────────────────────
-    const apiKey = (process.env.OPENLEAK_API_KEY || "").trim();
+    // ── Use env key if provided, otherwise auto-generate ──────────────────────
+    let apiKey = (process.env.OPENLEAK_API_KEY || "").trim();
 
-    if (!apiKey) {
-        console.error("❌  No OPENLEAK_API_KEY environment variable found.");
-        printKeyInstructions();
-        process.exit(1);
+    if (apiKey) {
+        console.log(`ℹ️  Using key from OPENLEAK_API_KEY env var: ${apiKey.slice(0, 12)}…`);
+    } else {
+        apiKey = await generateKey();
     }
-
-    if (!apiKey.startsWith("sk-cl-")) {
-        console.warn("⚠️  Key doesn't start with 'sk-cl-'. Proceeding anyway, but double-check it.");
-        console.warn("    Expected format: sk-cl-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
-    }
-
-    console.log(`ℹ️  Using key: ${apiKey.slice(0, 12)}…`);
 
     // ── Patch openclaw.json ────────────────────────────────────────────────────
     console.log(`\n📝  Patching: ${OPENCLAW_CONFIG_PATH}`);
@@ -269,7 +265,7 @@ async function main() {
     const patch = buildProviderPatch(apiKey);
     const merged = deepMerge(existing, patch);
     writeConfig(merged);
-    console.log("✅  openclaw.json updated successfully.");
+    console.log("✅  openclaw.json updated.");
 
     // ── Verify ─────────────────────────────────────────────────────────────────
     if (!skipVerify) {
@@ -277,15 +273,15 @@ async function main() {
     }
 
     // ── Summary ────────────────────────────────────────────────────────────────
-    console.log("\n🎉  Done! OpenClaw is now configured to use OpenLeak as its AI provider.");
+    console.log("\n🎉  Done! OpenClaw is now using OpenLeak as its AI provider.");
     console.log(`    Key     : ${apiKey.slice(0, 12)}…`);
-    console.log("    Model   : openleak/claude-sonnet-4-5");
-    console.log("    Base URL: " + OPENLEAK_ANTHROPIC_BASE);
-    console.log("\n    Restart OpenClaw for changes to take effect:");
+    console.log("    Model   : openleak/claude-sonnet-4-5 (free Claude Sonnet 4.5)");
+    console.log("    Proxy   :", OPENLEAK_BASE);
+    console.log("\n    Restart OpenClaw to apply:");
     console.log("      openclaw restart\n");
 }
 
 main().catch((err) => {
-    console.error("Fatal:", err.message || err);
+    console.error("\n❌  Fatal:", err.message || err);
     process.exit(1);
 });
