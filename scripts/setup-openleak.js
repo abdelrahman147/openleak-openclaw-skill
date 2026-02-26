@@ -20,10 +20,13 @@
  *   # 2. Run this script with your key:
  *
  *   Windows (PowerShell):
- *     $env:OPENLEAK_API_KEY="ol-xxx"; node setup-openleak.js
+ *     $env:OPENLEAK_API_KEY="sk-cl-xxx"; node setup-openleak.js
  *
  *   Linux/macOS:
- *     OPENLEAK_API_KEY=ol-xxx node setup-openleak.js
+ *     OPENLEAK_API_KEY=sk-cl-xxx node setup-openleak.js
+ *
+ *   # Skip the live verification step:
+ *   OPENLEAK_API_KEY=sk-cl-xxx node setup-openleak.js --apply-only
  *
  *   Options:
  *     --apply-only   skip the live verification step (faster)
@@ -214,15 +217,16 @@ function printKeyInstructions() {
     console.error(`╠${sep}╣`);
     console.error("║  1. Open  https://openleak.fun/like  in your browser       ║");
     console.error('║  2. Click "Generate API Key" on the page                   ║');
-    console.error("║  3. Copy the key that appears  (starts with  ol-)          ║");
+    console.error("║  3. Copy the key  (looks like  sk-cl-xxxxxxxxxxxxxxxxxxxx) ║");
+    console.error("║     ⚠️  You get 6 free keys per day — use them wisely!     ║");
     console.error("║  4. Re-run this script with your key:                      ║");
     console.error("║                                                             ║");
     console.error('║    Windows (PowerShell):                                   ║');
-    console.error('║      $env:OPENLEAK_API_KEY="ol-xxx"                        ║');
+    console.error('║      $env:OPENLEAK_API_KEY="sk-cl-xxx"                     ║');
     console.error("║      node setup-openleak.js                                ║");
     console.error("║                                                             ║");
     console.error("║    Linux/macOS:                                            ║");
-    console.error("║      OPENLEAK_API_KEY=ol-xxx node setup-openleak.js        ║");
+    console.error("║      OPENLEAK_API_KEY=sk-cl-xxx node setup-openleak.js     ║");
     console.error(`╚${sep}╝\n`);
 }
 
@@ -252,8 +256,9 @@ async function main() {
         process.exit(1);
     }
 
-    if (!apiKey.startsWith("ol-")) {
-        console.warn("⚠️  Key doesn't start with 'ol-'. Proceeding anyway, but double-check it.");
+    if (!apiKey.startsWith("sk-cl-")) {
+        console.warn("⚠️  Key doesn't start with 'sk-cl-'. Proceeding anyway, but double-check it.");
+        console.warn("    Expected format: sk-cl-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
     }
 
     console.log(`ℹ️  Using key: ${apiKey.slice(0, 12)}…`);
